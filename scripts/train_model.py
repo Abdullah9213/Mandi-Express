@@ -149,18 +149,20 @@ def main():
             # Log metrics
             mlflow.log_metrics(metrics)
             
-            # Save and log model
+            # Save and log model (for local storage)
             save_model(pipeline, MODEL_PATH)
             mlflow.log_artifact(MODEL_PATH)
             
-            # Register model in MLflow Model Registry
+            # Log the model as an artifact within the run.
+            # NOTE: I removed the `registered_model_name` argument because the DagsHub endpoint 
+            # for the MLflow Model Registry appears to be unsupported, which was causing the error.
             mlflow.sklearn.log_model(
-                pipeline,
-                "mandi_model",
-                registered_model_name="mandi_price_predictor"
+                sk_model=pipeline,
+                artifact_path="mandi_model",
+                # registered_model_name="mandi_price_predictor" # Removed
             )
             
-            print("Model registered in MLflow Model Registry!")
+            print("Model logged as artifact in the MLflow run.")
     else:
         # Train without MLflow
         pipeline, metrics, _ = train_model(df, hyperparams)
