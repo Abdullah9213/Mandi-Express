@@ -13,8 +13,18 @@ jobs:
           
       - name: Install Dependencies
         run: |
-          pip install pandas scikit-learn xgboost joblib matplotlib dagshub dvc seaborn mlflow
+          pip install pandas scikit-learn xgboost joblib matplotlib dagshub dvc[s3] seaborn mlflow
           # Added verification step to ensure the data is present
+      - name: Setup DVC and Pull Data
+        run: |
+          # 1. Configure DVC remotes using the credentials
+          dvc remote modify dagshub --local auth basic
+          dvc remote modify dagshub --local user ${{ secrets.DAGSHUB_USERNAME }}
+          dvc remote modify dagshub --local password ${{ secrets.DAGSHUB_TOKEN }}
+      
+          # 2. Pull the data file from Dagshub/S3
+          dvc pull include/processed_combined.csv
+      
       - name: Verify data file exists
         run: |
           if [ -f include/processed_combined.csv ]; then
