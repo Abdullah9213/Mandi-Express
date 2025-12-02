@@ -1,4 +1,6 @@
 [core]
-    remote = dagshub
+    remote = aws_s3_mandi
 ['remote "dagshub"']
     url = https://dagshub.com/i222515/mandi.dvc
+['remote "aws_s3_mandi"']
+    url = s3://mlop-dagshub-madi-data-aws-s3/dvc_cache
