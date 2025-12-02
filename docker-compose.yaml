@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # 1. Your Mandi API
+  # 1. Mandi API with Prometheus metrics
   mandi-api:
     build:
       context: .
@@ -12,8 +12,17 @@ services:
       - ./models:/app/models
     environment:
       - MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
+      - MODEL_PATH=/app/models/mandi_pipeline.pkl
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # 2. Prometheus (Collects Data)
+  # 2. Prometheus (Metrics Collection)
   prometheus:
     image: prom/prometheus
     ports:
@@ -23,20 +32,27 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
 
-  # 3. Grafana (Visualizes Data)
+  # 3. Grafana (Visualization & Alerting)
   grafana:
     image: grafana/grafana
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
 
-  # 4. MinIO (Object Storage - S3 Compatible)
+  # 4. MinIO (S3-compatible Object Storage)
   minio:
     image: minio/minio
     ports:
       - "9000:9000"
-      - "9001:9001"
+      - "9002:9001"
     volumes:
       - minio_data:/data
     environment:
@@ -51,3 +67,4 @@ services:
 
 volumes:
   minio_data:
+  grafana_data:

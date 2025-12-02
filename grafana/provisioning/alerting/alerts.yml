@@ -1,0 +1,96 @@
+# Phase IV: Grafana Alerting Configuration
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Mandi API Alerts
+    folder: Mandi
+    interval: 1m
+    rules:
+      # Alert 1: High Latency
+      - uid: high-latency-alert
+        title: High API Latency
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: histogram_quantile(0.95, rate(mandi_api_request_latency_seconds_bucket[5m]))
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.5
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: avg
+              refId: C
+              type: classic_conditions
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: API latency exceeds 500ms threshold
+          description: The 95th percentile latency has exceeded 500ms for the past 2 minutes
+        labels:
+          severity: warning
+
+      # Alert 2: Data Drift Spike
+      - uid: data-drift-alert
+        title: High Data Drift Detected
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              expr: mandi_data_drift_ratio
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.3
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - A
+                  reducer:
+                    type: avg
+              refId: C
+              type: classic_conditions
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: Data drift ratio exceeds 30%
+          description: More than 30% of requests contain unknown cities or crops
+        labels:
+          severity: critical

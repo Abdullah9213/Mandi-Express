@@ -69,3 +69,5 @@ include/reports/
 # ============================================================
 .DS_Store
 Thumbs.db
+/data
+/models

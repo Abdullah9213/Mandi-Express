@@ -5,12 +5,10 @@ FROM python:3.9-slim
 WORKDIR /app
 
 # Copy model and code
-# We copy the 'models' folder from the project root into the container
 COPY ./models /app/models
 COPY ./api/app.py /app/app.py
 
-# Install dependencies
-RUN pip install fastapi uvicorn pandas scikit-learn xgboost joblib
+RUN pip install fastapi uvicorn pandas scikit-learn joblib prometheus-client
 
 # Expose port
 EXPOSE 8000

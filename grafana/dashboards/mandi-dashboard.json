@@ -1,0 +1,80 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Mandi API Monitoring",
+    "tags": ["mandi", "api", "monitoring"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "rate(mandi_api_requests_total[5m])",
+            "legendFormat": "{{method}} {{endpoint}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Response Latency (p95)",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(mandi_api_request_latency_seconds_bucket[5m]))",
+            "legendFormat": "p95 latency"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Data Drift Ratio",
+        "type": "gauge",
+        "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "expr": "mandi_data_drift_ratio",
+            "legendFormat": "Drift Ratio"
+          }
+        ],
+        "options": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 0.1 },
+              { "color": "red", "value": 0.3 }
+            ]
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Last Prediction Value",
+        "type": "stat",
+        "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+        "targets": [
+          {
+            "expr": "mandi_last_prediction_value",
+            "legendFormat": "Price (100kg)"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Total Requests",
+        "type": "stat",
+        "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum(mandi_api_requests_total)",
+            "legendFormat": "Total"
+          }
+        ]
+      }
+    ],
+    "refresh": "5s"
+  }
+}

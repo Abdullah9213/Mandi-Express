@@ -1,45 +1,158 @@
-Overview
-========
+# Mandi Price Prediction - MLOps Pipeline
 
-Welcome to Astronomer! This project was generated after you ran 'astro dev init' using the Astronomer CLI. This readme describes the contents of the project, as well as how to run Apache Airflow on your local machine.
+A complete MLOps pipeline for predicting agricultural commodity prices in Pakistan using real-time data from AMIS.
 
-Project Contents
-================
+## Project Structure
 
-Your Astro project contains the following files and folders:
+\`\`\`
+mandi/
+├── dags/                    # Airflow DAGs
+│   └── mandi_automation.py  # Main ETL pipeline
+├── api/                     # FastAPI prediction service
+│   ├── app.py               # API with Prometheus metrics
+│   └── Dockerfile           # Container definition
+├── scripts/                 # Training and utility scripts
+│   ├── train_model.py       # Model training with MLflow
+│   └── generate_cml_report.py
+├── tests/                   # Unit tests
+├── grafana/                 # Monitoring dashboards
+├── .github/workflows/       # CI/CD pipelines
+├── docker-compose.yaml      # Local services
+└── prometheus.yml           # Metrics configuration
+\`\`\`
 
-- dags: This folder contains the Python files for your Airflow DAGs. By default, this directory includes one example DAG:
-    - `example_astronauts`: This DAG shows a simple ETL pipeline example that queries the list of astronauts currently in space from the Open Notify API and prints a statement for each astronaut. The DAG uses the TaskFlow API to define tasks in Python, and dynamic task mapping to dynamically print a statement for each astronaut. For more on how this DAG works, see our [Getting started tutorial](https://www.astronomer.io/docs/learn/get-started-with-airflow).
-- Dockerfile: This file contains a versioned Astro Runtime Docker image that provides a differentiated Airflow experience. If you want to execute other commands or overrides at runtime, specify them here.
-- include: This folder contains any additional files that you want to include as part of your project. It is empty by default.
-- packages.txt: Install OS-level packages needed for your project by adding them to this file. It is empty by default.
-- requirements.txt: Install Python packages needed for your project by adding them to this file. It is empty by default.
-- plugins: Add custom or community plugins for your project to this file. It is empty by default.
-- airflow_settings.yaml: Use this local-only file to specify Airflow Connections, Variables, and Pools instead of entering them in the Airflow UI as you develop DAGs in this project.
+## Phase Checklist
 
-Deploy Your Project Locally
-===========================
+### Phase I: Data Ingestion
+- [x] Airflow DAG with daily schedule
+- [x] Data extraction from AMIS API
+- [x] Quality gate (null check, validation)
+- [x] Feature engineering (lag, time features)
+- [x] DVC data versioning
+- [x] DagsHub integration
+- [x] Pandas profiling reports
+- [x] MLflow experiment logging
 
-Start Airflow on your local machine by running 'astro dev start'.
+### Phase II: Experimentation & Model Management
+- [x] train.py with MLflow tracking
+- [x] Hyperparameter logging
+- [x] Metrics logging (RMSE, MAE, R2)
+- [x] Model artifact storage
+- [x] MLflow Model Registry
 
-This command will spin up five Docker containers on your machine, each for a different Airflow component:
+### Phase III: CI/CD
+- [x] GitHub Actions workflows
+- [x] Code quality checks (linting)
+- [x] Unit tests
+- [x] CML reports for PRs
+- [x] Docker containerization
+- [x] Docker Hub push
+- [x] Deployment verification
 
-- Postgres: Airflow's Metadata Database
-- Scheduler: The Airflow component responsible for monitoring and triggering tasks
-- DAG Processor: The Airflow component responsible for parsing DAGs
-- API Server: The Airflow component responsible for serving the Airflow UI and API
-- Triggerer: The Airflow component responsible for triggering deferred tasks
+### Phase IV: Monitoring & Observability
+- [x] Prometheus metrics in API
+- [x] Request latency tracking
+- [x] Data drift detection
+- [x] Grafana dashboards
+- [x] Alerting rules
 
-When all five containers are ready the command will open the browser to the Airflow UI at http://localhost:8080/. You should also be able to access your Postgres Database at 'localhost:5432/postgres' with username 'postgres' and password 'postgres'.
+## Quick Start
 
-Note: If you already have either of the above ports allocated, you can either [stop your existing Docker containers or change the port](https://www.astronomer.io/docs/astro/cli/troubleshoot-locally#ports-are-not-available-for-my-local-airflow-webserver).
+### 1. Clone and Setup
 
-Deploy Your Project to Astronomer
-=================================
+\`\`\`bash
+git clone https://dagshub.com/i222515/mandi.git
+cd mandi
 
-If you have an Astronomer account, pushing code to a Deployment on Astronomer is simple. For deploying instructions, refer to Astronomer documentation: https://www.astronomer.io/docs/astro/deploy-code/
+# Create .env file
+cp .env.example .env
+# Edit .env with your credentials
+\`\`\`
 
-Contact
-=======
+### 2. Initialize DVC
 
-The Astronomer CLI is maintained with love by the Astronomer team. To report a bug or suggest a change, reach out to our support.
+\`\`\`bash
+python -m dvc init
+python -m dvc remote add -d dagshub https://dagshub.com/i222515/mandi.dvc
+python -m dvc remote modify dagshub --local auth basic
+python -m dvc remote modify dagshub --local user YOUR_USERNAME
+python -m dvc remote modify dagshub --local password YOUR_TOKEN
+python -m dvc pull
+\`\`\`
+
+### 3. Start Airflow (using Astro CLI)
+
+\`\`\`bash
+astro dev start
+# Access at http://localhost:8080
+\`\`\`
+
+### 4. Start Monitoring Stack
+
+\`\`\`bash
+docker-compose up -d
+\`\`\`
+
+| Service | URL |
+|---------|-----|
+| API | http://localhost:8000 |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3001 (admin/admin) |
+| MinIO | http://localhost:9002 (minioadmin/minioadmin) |
+
+### 5. Run Training
+
+\`\`\`bash
+python scripts/train_model.py
+\`\`\`
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | API info |
+| `/health` | GET | Health check |
+| `/predict` | POST | Make prediction |
+| `/metrics` | GET | Prometheus metrics |
+| `/drift` | GET | Drift statistics |
+
+### Example Prediction
+
+\`\`\`bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"city": "Lahore", "crop": "Onion", "date": "2024-01-15"}'
+\`\`\`
+
+## GitHub Secrets Required
+
+Add these in your GitHub repo Settings > Secrets:
+
+| Secret | Description |
+|--------|-------------|
+| `DAGSHUB_USERNAME` | Your DagsHub username |
+| `DAGSHUB_TOKEN` | Your DagsHub access token |
+| `MLFLOW_TRACKING_URI` | MLflow tracking URL |
+| `DOCKER_USERNAME` | Docker Hub username |
+| `DOCKER_PASSWORD` | Docker Hub password |
+
+## Branch Strategy
+
+\`\`\`
+feature/* → dev → test → master
+\`\`\`
+
+- `feature/*` → `dev`: Code quality + unit tests
+- `dev` → `test`: Model training + CML report
+- `test` → `master`: Docker build + deploy verification
+
+## Monitoring Alerts
+
+| Alert | Threshold | Severity |
+|-------|-----------|----------|
+| High Latency | p95 > 500ms | Warning |
+| Data Drift | ratio > 30% | Critical |
+
+## License
+
+MIT
