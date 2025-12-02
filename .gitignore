@@ -14,3 +14,4 @@ models/
 include/processed_combined.csv
 *.csv
 *.pkl
+/models
