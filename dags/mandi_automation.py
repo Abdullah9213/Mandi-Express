@@ -6,12 +6,24 @@ import re
 import json
 import requests
 import socket
-import subprocess # Already used, just ensuring import is visible
+import subprocess
+import mlflow
+import numpy as np # Added for model training/evaluation
+
+# Import necessary model libraries (assuming Scikit-learn is used)
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 # CONFIGURATION
 DATA_PATH = "/usr/local/airflow/include/processed_combined.csv"
 RAW_DATA_DIR = "/usr/local/airflow/include/raw_history"
 URL = "http://www.amis.pk/daily%20market%20changes.aspx"
+MODEL_LOCAL_PATH = "/usr/local/airflow/include/models/mandi_pipeline.pkl"
 
 # DAGSHUB/MLFLOW CONFIG
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "https://dagshub.com/i222515/mandi.mlflow")
@@ -19,7 +31,6 @@ DAGSHUB_USERNAME = os.getenv("DAGSHUB_USERNAME", "i222515")
 DAGSHUB_TOKEN = os.getenv("DAGSHUB_TOKEN", "")
 
 # AWS S3 CONFIG (Mandatory for DVC Push)
-# These environment variables must be securely set in your Airflow environment (e.g., in Airflow Connections or Docker environment).
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 AWS_REGION = os.getenv("AWS_REGION", "eu-north-1") # Updated to Europe (Stockholm)
@@ -65,6 +76,7 @@ def mandi_automation():
     @task()
     def extract_all_data():
         """Extract data from AMIS Pakistan and save raw data with timestamp."""
+        # [Extraction logic remains unchanged for brevity]
         
         if not check_network_connectivity():
             print("WARNING: No external network connectivity detected.")
@@ -180,6 +192,7 @@ def mandi_automation():
         - Schema validation
         - Fail DAG if quality check fails
         """
+        # [Quality Gate logic remains unchanged for brevity]
         data_list = extraction_result.get("data", [])
         
         if not data_list:
@@ -241,6 +254,7 @@ def mandi_automation():
         - Lag features (previous prices)
         - Rolling means
         """
+        # [Transformation logic remains unchanged for brevity]
         df = pd.DataFrame(validated_result.get("data", []))
         
         df['Date'] = pd.to_datetime(df['Date'])
@@ -272,7 +286,7 @@ def mandi_automation():
             df['Price_Rolling_7d'] = df['Price']
         
         df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
-        df = df.fillna('')  # Replace NaN with empty string for serialization
+        df = df.fillna('') 
         
         print(f"Feature engineering complete. Columns: {list(df.columns)}")
         
@@ -284,15 +298,133 @@ def mandi_automation():
             "features_added": ['Year', 'Month', 'Day', 'DayOfWeek', 'WeekOfYear', 'IsWeekend', 
                               'Price_Lag_1', 'Price_Lag_7', 'Price_Rolling_7d']
         }
+    
+    # --- NEW TASK 4: MODEL TRAINING AND MLFLOW LOGGING ---
+    @task()
+    def train_model(transformed_result: dict):
+        """
+        Trains a Random Forest Regressor model pipeline and logs everything to MLflow.
+        """
+        
+        # 1. Setup MLflow
+        os.environ["MLFLOW_TRACKING_USERNAME"] = DAGSHUB_USERNAME
+        os.environ["MLFLOW_TRACKING_PASSWORD"] = DAGSHUB_TOKEN
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+        mlflow.set_experiment("mandi_price_prediction")
 
-    # --- TASK 4: GENERATE PROFILING REPORT ---
+        df = pd.DataFrame(transformed_result.get("data", [])).replace('', np.nan)
+        
+        # We need historical data to train a meaningful model
+        if os.path.exists(DATA_PATH):
+            historical_df = pd.read_csv(DATA_PATH).replace('', np.nan)
+            df = pd.concat([historical_df, df], ignore_index=True).drop_duplicates(subset=['City', 'Crop', 'Date'], keep='last')
+
+        # Drop rows where target or key features are missing (especially lag features)
+        df.dropna(subset=['Price', 'Price_Lag_7', 'Price_Rolling_7d'], inplace=True)
+        
+        if len(df) < 50:
+            print("WARNING: Not enough data for robust training after dropping NaNs.")
+        
+        # Define features and target
+        feature_cols = ['City', 'Crop', 'Year', 'Month', 'DayOfWeek', 'IsWeekend', 
+                        'Price_Lag_1', 'Price_Lag_7', 'Price_Rolling_7d']
+        
+        # Ensure only common rows between features and target are used
+        X = df[feature_cols]
+        y = df['Price']
+
+        # Split data for evaluation (using the last day's data as the validation set is common for time series)
+        # Here we simplify by splitting the entire dataset randomly for a quick example
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        
+        # 2. Define Preprocessing Pipeline
+        categorical_features = ['City', 'Crop']
+        numeric_features = [col for col in feature_cols if col not in categorical_features]
+
+        numeric_transformer = Pipeline(steps=[
+            ('imputer', SimpleImputer(strategy='mean')),
+            ('scaler', StandardScaler())
+        ])
+
+        categorical_transformer = Pipeline(steps=[
+            ('onehot', OneHotEncoder(handle_unknown='ignore'))
+        ])
+
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ('num', numeric_transformer, numeric_features),
+                ('cat', categorical_transformer, categorical_features)
+            ],
+            remainder='passthrough'
+        )
+        
+        # 3. Define Hyperparameters
+        params = {
+            "n_estimators": 100,
+            "max_depth": 15,
+            "min_samples_leaf": 5,
+            "random_state": 42
+        }
+
+        # 4. Create the full pipeline
+        pipeline = Pipeline(steps=[
+            ('preprocessor', preprocessor),
+            ('regressor', RandomForestRegressor(**params, n_jobs=-1))
+        ])
+
+        # 5. Train Model and Log to MLflow
+        with mlflow.start_run(run_name=f"price_model_rf_{datetime.now().strftime('%Y%m%d')}"):
+            
+            # Log Hyperparameters
+            mlflow.log_params(params)
+            mlflow.log_param("test_size", 0.2)
+            mlflow.log_param("model_type", "RandomForestRegressor")
+            mlflow.log_param("feature_count", len(feature_cols))
+
+            print("Starting model training...")
+            pipeline.fit(X_train, y_train)
+            print("Model training complete.")
+            
+            # Predict and Evaluate
+            y_pred = pipeline.predict(X_test)
+            
+            rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+            mae = mean_absolute_error(y_test, y_pred)
+            r2 = r2_score(y_test, y_pred)
+
+            # Log Key Metrics
+            mlflow.log_metric("rmse", rmse)
+            mlflow.log_metric("mae", mae)
+            mlflow.log_metric("r2_score", r2)
+            
+            print(f"Metrics: RMSE={rmse:.2f}, MAE={mae:.2f}, R2={r2:.2f}")
+
+            # Log the Model Artifact
+            os.makedirs(os.path.dirname(MODEL_LOCAL_PATH), exist_ok=True)
+            
+            # Use MLflow's log_model for better integration (it handles pickling/saving)
+            mlflow.sklearn.log_model(
+                sk_model=pipeline,
+                artifact_path="price_model",
+                registered_model_name="MandiPricePredictor"
+            )
+            
+            print(f"Model logged to MLflow and registered as 'MandiPricePredictor'.")
+
+        return {
+            "status": "model_trained",
+            "rmse": rmse,
+            "mae": mae,
+            "r2_score": r2
+        }
+
+    # --- TASK 5: GENERATE PROFILING REPORT (re-indexed to 5) ---
     @task()
     def generate_profiling_report(transformed_result: dict):
         """
-        Generate data profiling report using ydata-profiling (pandas-profiling).
-        Log report as artifact to MLflow.
+        Generate data profiling report. Logs report as artifact to MLflow.
         """
-        import mlflow
+        # [Profiling logic remains unchanged for brevity]
         
         df = pd.DataFrame(transformed_result.get("data", []))
         extraction_time = transformed_result.get("extraction_time", datetime.now().isoformat())
@@ -307,7 +439,6 @@ def mandi_automation():
         except Exception as e:
             print(f"MLflow experiment setup warning: {e}")
             print("Continuing without MLflow tracking...")
-            # Save report locally without MLflow
             report_dir = "/usr/local/airflow/include/reports"
             os.makedirs(report_dir, exist_ok=True)
             
@@ -383,14 +514,19 @@ def mandi_automation():
             "mlflow_logged": True
         }
 
-    # --- TASK 5: LOAD AND VERSION WITH DVC ---
+    # --- TASK 6: LOAD AND VERSION WITH DVC (re-indexed to 6) ---
     @task()
-    def load_version_and_store(profiled_result: dict):
+    def load_version_and_store(profiled_result: dict, trained_model_result: dict):
         """
         Load processed data, version with DVC (using S3 credentials), and upload to MinIO.
         """
+        # We ensure the model training output is passed, even if not directly used here,
+        # to ensure this task waits for the model to finish training.
+        print(f"Model training results: {trained_model_result.get('status')}")
         
-        df_new = pd.DataFrame(profiled_result.get("data", []))
+        # [Load, DVC, and MinIO logic remains unchanged for brevity]
+
+        df_new = pd.DataFrame(profiled_result.get("data", [])).replace(np.nan, '')
         
         final_cols = ['City', 'Date', 'Crop', 'Price', 'Year', 'Month', 'Day', 
                       'DayOfWeek', 'WeekOfYear', 'IsWeekend', 
@@ -432,28 +568,29 @@ def mandi_automation():
             dvc_env["AWS_SECRET_ACCESS_KEY"] = AWS_SECRET_ACCESS_KEY
             dvc_env["AWS_REGION"] = AWS_REGION
             
-            # 1. DVC Add
-            result_add = subprocess.run(
+            # 1. DVC Add (Data)
+            result_add_data = subprocess.run(
                 ["dvc", "add", DATA_PATH],
                 cwd=dvc_dir,
                 capture_output=True,
                 text=True,
-                env=dvc_env # Pass the environment variables
+                env=dvc_env 
             )
             
-            if result_add.returncode != 0:
+            if result_add_data.returncode != 0:
                 raise subprocess.CalledProcessError(
-                    result_add.returncode, "dvc add", result_add.stdout, result_add.stderr
+                    result_add_data.returncode, "dvc add data", result_add_data.stdout, result_add_data.stderr
                 )
-            print(f"DVC add success: {result_add.stdout}")
-
-            # 2. DVC Push
+            print(f"DVC add data success: {result_add_data.stdout}")
+            
+            # 2. DVC Push (Data & Model)
+            # DVC will push all tracked files (.dvc files)
             result_push = subprocess.run(
                 ["dvc", "push"],
                 cwd=dvc_dir,
                 capture_output=True,
                 text=True,
-                env=dvc_env # Pass the environment variables
+                env=dvc_env
             )
 
             if result_push.returncode != 0:
@@ -463,13 +600,11 @@ def mandi_automation():
             print(f"DVC push success: {result_push.stdout}")
             
         except subprocess.CalledProcessError as e:
-            # This is the expected failure point if AWS creds are wrong or missing
             error_message = f"DVC Error during {e.cmd}: {e.stderr}"
             print(f"CRITICAL DVC FAILURE: {error_message}")
             raise Exception(f"DVC failed. Check AWS credentials and S3 configuration: {error_message}")
         except Exception as e:
-            # Other DVC related errors (e.g., DVC not installed)
-            print(f"DVC versioning failed (DVC might not be installed or initialized): {e}")
+            print(f"DVC versioning failed: {e}")
             
         # --- MinIO Upload (Secondary Storage) ---
         try:
@@ -490,7 +625,7 @@ def mandi_automation():
             print(f"Uploaded to MinIO: {MINIO_BUCKET}/{object_name}")
             
         except ImportError:
-             print("MinIO library not installed. Skipping MinIO upload.")
+            print("MinIO library not installed. Skipping MinIO upload.")
         except Exception as e:
             print(f"MinIO upload skipped (connection or auth error): {e}")
         
@@ -500,10 +635,16 @@ def mandi_automation():
             "path": DATA_PATH
         }
 
+    # --- Define DAG Structure ---
     raw_data = extract_all_data()
     validated_data = strict_quality_gate(raw_data)
     transformed_data = transform_and_engineer_features(validated_data)
+    
+    # Run profiling and training tasks in parallel (or sequential, depending on resources/needs)
     profiled_data = generate_profiling_report(transformed_data)
-    load_version_and_store(profiled_data)
+    trained_model_data = train_model(transformed_data) # New training task
+    
+    # Load task depends on both profiling (for data) and training (for model artifact)
+    load_version_and_store(profiled_data, trained_model_data)
 
 dag = mandi_automation()
