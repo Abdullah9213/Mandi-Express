@@ -13,7 +13,7 @@ jobs:
           
       - name: Install Dependencies
         run: |
-          pip install pandas scikit-learn xgboost joblib matplotlib seaborn
+          pip install pandas scikit-learn xgboost joblib matplotlib dagshub dvc seaborn mlflow
           
       - name: Train Model (CI Test)
         run: |
