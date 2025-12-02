@@ -14,7 +14,16 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install pandas scikit-learn xgboost joblib matplotlib dagshub dvc seaborn mlflow
-          
+          # Added verification step to ensure the data is present
+      - name: Verify data file exists
+        run: |
+          if [ -f include/processed_combined.csv ]; then
+            echo "✅ Data file found: include/processed_combined.csv"
+            ls -l include/processed_combined.csv
+          else
+            echo "❌ ERROR: Data file not found after DVC pull."
+            exit 1
+          fi    
       - name: Train Model (CI Test)
         run: |
           python scripts/train_model.py
