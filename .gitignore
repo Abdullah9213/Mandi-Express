@@ -1,17 +1,71 @@
-.git
-.env
-.DS_Store
-airflow_settings.yaml
-__pycache__/
-astro
-.venv
-airflow-webserver.pid
-webserver_config.py
-airflow.cfg
-airflow.db
-data/
-models/
-include/processed_combined.csv
+# ============================================================
+# DATA FILES (Tracked by DVC, not Git)
+# DVC will manage the necessary file exclusions automatically.
+# DO NOT include the data/ or models/ directories themselves.
+# ============================================================
+# data/  <-- REMOVED
+# models/  <-- REMOVED
+include/processed_combined.csv # Still ignore the file itself if DVC is tracking it
 *.csv
 *.pkl
-/models
+*.joblib
+
+# ============================================================
+# DVC Metadata Files (MUST BE TRACKED BY GIT)
+# DVC metadata files are NOT ignored
+# ============================================================
+# /data.dvc  <-- REMOVED
+# /models.dvc  <-- REMOVED
+
+# DVC cache (Always ignore the DVC cache)
+.dvc/cache/
+
+# ============================================================
+# PYTHON
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# ============================================================
+# ENVIRONMENT
+# ============================================================
+.env
+.env.local
+*.log
+
+# ============================================================
+# IDE
+# ============================================================
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ============================================================
+# AIRFLOW
+# ============================================================
+logs/
+airflow.db
+airflow.cfg
+webserver_config.py
+
+# ============================================================
+# REPORTS (Generated)
+# ============================================================
+include/reports/
+*.html
+
+# ============================================================
+# OS
+# ============================================================
+.DS_Store
+Thumbs.db
