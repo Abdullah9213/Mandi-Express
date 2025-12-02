@@ -1,0 +1,36 @@
+name: Mandi-AI-CI
+on: [push]
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+          
+      - name: Install Dependencies
+        run: |
+          pip install pandas scikit-learn xgboost joblib matplotlib seaborn
+          
+      - name: Train Model (CI Test)
+        run: |
+          python scripts/train_model.py
+          
+      - name: Write CML Report
+        uses: iterative/setup-cml@v1
+        with:
+          version: 'latest'
+      - name: Publish Report
+        env:
+          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "## 🚜 Mandi AI Model Report" > report.md
+          cat metrics.txt >> report.md
+          
+          echo "## 📊 Residuals Plot" >> report.md
+          cml-publish residuals.png --md >> report.md
+          
+          cml-send-comment report.md

@@ -1,0 +1,23 @@
+# Astro Runtime includes the following pre-installed providers packages
+# Core
+pandas
+lxml
+
+# Data Quality & Profiling
+ydata-profiling
+scipy
+
+# MLflow & Experiment Tracking
+mlflow
+dagshub
+
+# DVC - Data Version Control
+dvc
+dvc-s3
+
+# MinIO Client
+minio
+
+# Scikit-learn for model training
+scikit-learn
+joblib
