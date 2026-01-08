@@ -1,158 +1,118 @@
-# Mandi Price Prediction - MLOps Pipeline
+# Mandi: Agricultural Price Prediction MLOps Pipeline
 
-A complete MLOps pipeline for predicting agricultural commodity prices in Pakistan using real-time data from AMIS.
+Mandi is a production-grade MLOps system designed to forecast agricultural commodity prices in Pakistan. It ingests market data from the Agriculture Marketing Information Service (AMIS) and implements a full Continuous Training (CT) and Continuous Deployment (CD) workflow to deliver reproducible model training, versioning, monitoring, and serving.
+
+<img width="899" height="558" alt="Gemini_Generated_Image_gyn079gyn079gyn0" src="https://github.com/user-attachments/assets/f1dda777-4aeb-4df1-864c-929e8826618f" />
+
+
+## System Architecture
+
+The project follows a modular microservices architecture for scalability and reproducibility:
+
+- Data Ingestion: Apache Airflow (Astro) runs automated ETL pipelines to extract and validate daily market data.
+- Versioning: DVC (with an S3-compatible remote like MinIO or DagsHub) version-controls raw and processed datasets and model artifacts.
+- Experiment Tracking: MLflow logs experiments, metrics (RMSE, MAE), parameters, and manages the Model Registry.
+- CI/CD: GitHub Actions runs linting, tests, and CML reporting on pull requests to track model changes.
+- Serving: The champion model is containerized and exposed via a FastAPI-based REST inference service.
+- Observability: Prometheus and Grafana provide metrics, dashboards, and alerts for latency, system health, and data drift.
+
+## Technology Stack
+
+- Orchestration: Apache Airflow (Astro)
+- Data Versioning: DVC + MinIO / DagsHub
+- Experiment Tracking: MLflow
+- Serving: FastAPI + Uvicorn
+- CI/CD: GitHub Actions + CML
+- Monitoring: Prometheus + Grafana
+- Infrastructure: Docker Compose
 
 ## Project Structure
 
-\`\`\`
-mandi/
-├── dags/                    # Airflow DAGs
-│   └── mandi_automation.py  # Main ETL pipeline
-├── api/                     # FastAPI prediction service
-│   ├── app.py               # API with Prometheus metrics
-│   └── Dockerfile           # Container definition
-├── scripts/                 # Training and utility scripts
-│   ├── train_model.py       # Model training with MLflow
-│   └── generate_cml_report.py
-├── tests/                   # Unit tests
-├── grafana/                 # Monitoring dashboards
-├── .github/workflows/       # CI/CD pipelines
-├── docker-compose.yaml      # Local services
-└── prometheus.yml           # Metrics configuration
-\`\`\`
-
-## Phase Checklist
-
-### Phase I: Data Ingestion
-- [x] Airflow DAG with daily schedule
-- [x] Data extraction from AMIS API
-- [x] Quality gate (null check, validation)
-- [x] Feature engineering (lag, time features)
-- [x] DVC data versioning
-- [x] DagsHub integration
-- [x] Pandas profiling reports
-- [x] MLflow experiment logging
-
-### Phase II: Experimentation & Model Management
-- [x] train.py with MLflow tracking
-- [x] Hyperparameter logging
-- [x] Metrics logging (RMSE, MAE, R2)
-- [x] Model artifact storage
-- [x] MLflow Model Registry
-
-### Phase III: CI/CD
-- [x] GitHub Actions workflows
-- [x] Code quality checks (linting)
-- [x] Unit tests
-- [x] CML reports for PRs
-- [x] Docker containerization
-- [x] Docker Hub push
-- [x] Deployment verification
-
-### Phase IV: Monitoring & Observability
-- [x] Prometheus metrics in API
-- [x] Request latency tracking
-- [x] Data drift detection
-- [x] Grafana dashboards
-- [x] Alerting rules
+<img width="576" height="347" alt="{5659B704-1055-4B85-8DAE-6AD571CC5F77}" src="https://github.com/user-attachments/assets/e3f5da1c-c214-4337-9f21-88280052fbfd" />
 
 ## Quick Start
 
-### 1. Clone and Setup
+Prerequisites:
 
-\`\`\`bash
+- Docker Desktop & Docker Compose
+- Python 3.9+
+- Astro CLI (optional, for Airflow dev environment)
+
+1) Clone and configure
+
+```bash
 git clone https://dagshub.com/i222515/mandi.git
 cd mandi
-
-# Create .env file
 cp .env.example .env
-# Edit .env with your credentials
-\`\`\`
+# Edit .env to add your DagsHub/MLflow/MinIO credentials
+```
 
-### 2. Initialize DVC
+2) Data synchronization with DVC
 
-\`\`\`bash
-python -m dvc init
+```bash
+python -m dvc init  # only if DVC not already initialized locally
 python -m dvc remote add -d dagshub https://dagshub.com/i222515/mandi.dvc
 python -m dvc remote modify dagshub --local auth basic
 python -m dvc remote modify dagshub --local user YOUR_USERNAME
 python -m dvc remote modify dagshub --local password YOUR_TOKEN
 python -m dvc pull
-\`\`\`
+```
 
-### 3. Start Airflow (using Astro CLI)
+3) Start services
 
-\`\`\`bash
-astro dev start
-# Access at http://localhost:8080
-\`\`\`
-
-### 4. Start Monitoring Stack
-
-\`\`\`bash
+```bash
+# Start monitoring, API, and storage
 docker-compose up -d
-\`\`\`
 
-| Service | URL |
-|---------|-----|
-| API | http://localhost:8000 |
-| Prometheus | http://localhost:9090 |
-| Grafana | http://localhost:3001 (admin/admin) |
-| MinIO | http://localhost:9002 (minioadmin/minioadmin) |
+# Start Airflow (if using Astro dev environment)
+astro dev start
+```
 
-### 5. Run Training
+4) Access points (defaults)
 
-\`\`\`bash
-python scripts/train_model.py
-\`\`\`
+- Prediction API: http://localhost:8000
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3001  (admin / admin)
+- MinIO Console: http://localhost:9001  (minioadmin / minioadmin)
+- Airflow UI: http://localhost:8080  (admin / admin)
 
-## API Endpoints
+## API Usage
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | API info |
-| `/health` | GET | Health check |
-| `/predict` | POST | Make prediction |
-| `/metrics` | GET | Prometheus metrics |
-| `/drift` | GET | Drift statistics |
+Interactive docs: http://localhost:8000/docs
 
-### Example Prediction
+Example prediction request:
 
-\`\`\`bash
+```bash
 curl -X POST http://localhost:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{"city": "Lahore", "crop": "Onion", "date": "2024-01-15"}'
-\`\`\`
+	-H "Content-Type: application/json" \
+	-d '{"city":"Lahore","crop":"Onion","date":"2024-01-15"}'
+```
 
-## GitHub Secrets Required
+## Development Workflow
 
-Add these in your GitHub repo Settings > Secrets:
+We follow GitFlow-style branching:
 
-| Secret | Description |
-|--------|-------------|
-| `DAGSHUB_USERNAME` | Your DagsHub username |
-| `DAGSHUB_TOKEN` | Your DagsHub access token |
-| `MLFLOW_TRACKING_URI` | MLflow tracking URL |
-| `DOCKER_USERNAME` | Docker Hub username |
-| `DOCKER_PASSWORD` | Docker Hub password |
+- `feature/*`: New features and experiments. Run linting locally.
+- `dev`: Integration and CML-driven model comparison on PRs.
+- `test`: Deployment verification.
+- `master`: Production; CI builds and publishes Docker images.
 
-## Branch Strategy
+Required secrets for CI (GitHub repo settings):
 
-\`\`\`
-feature/* → dev → test → master
-\`\`\`
+- DAGSHUB_USERNAME, DAGSHUB_TOKEN
+- MLFLOW_TRACKING_URI
+- DOCKER_USERNAME, DOCKER_PASSWORD
 
-- `feature/*` → `dev`: Code quality + unit tests
-- `dev` → `test`: Model training + CML report
-- `test` → `master`: Docker build + deploy verification
+## Monitoring & Alerts
 
-## Monitoring Alerts
+Prometheus alerting is configured for key conditions such as high latency and data drift. Example rules:
 
-| Alert | Threshold | Severity |
-|-------|-----------|----------|
-| High Latency | p95 > 500ms | Warning |
-| Data Drift | ratio > 30% | Critical |
+- High Latency: p95 > 500ms (warning)
+- Data Drift: drift ratio > 30% (critical)
 
 ## License
 
-MIT
+This project is licensed under the MIT License.
+
+---
+
