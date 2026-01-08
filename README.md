@@ -1,9 +1,10 @@
-# Mandi: Agricultural Price Prediction MLOps Pipeline
+	# Mandi: Agricultural Price Prediction MLOps Pipeline
 
 Mandi is a production-grade MLOps system designed to forecast agricultural commodity prices in Pakistan. It ingests market data from the Agriculture Marketing Information Service (AMIS) and implements a full Continuous Training (CT) and Continuous Deployment (CD) workflow to deliver reproducible model training, versioning, monitoring, and serving.
 
 <img width="899" height="558" alt="Gemini_Generated_Image_gyn079gyn079gyn0" src="https://github.com/user-attachments/assets/f1dda777-4aeb-4df1-864c-929e8826618f" />
-<img width="488" height="404" alt="{E0EA2DB7-46DD-49EA-A1EE-7BA2D4708F93}" src="https://github.com/user-attachments/assets/e4f96f1a-1742-43bf-a114-efe425ec9145" />
+<<img width="808" height="355" alt="{21DA75C4-60B3-4674-9B59-145FE2373AF6}" src="https://github.com/user-attachments/assets/ca7a1b16-7c2d-4f47-b22c-c5c46cc226c2" />
+
 
 
 ## System Architecture
